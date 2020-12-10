@@ -43,11 +43,11 @@ datatable_name_n_mixture = gsub(" ", "", paste("NumGroupPerStatn_", name_analysi
 directory_result_n_mixture = here::here("output", "NumGroupPerStatn", datatable_name_n_mixture)
 
 #===================================================================#
-#                  01_number_of_groups_to_abundance                 #
+#                  02_number_of_groups_to_abundance                 #
 #===================================================================#
 
 # -----------Output directories and files --------------------------
 datatable_name_abundance = gsub(" ", "", paste("site_abundance_", name_analysis_n_mixture, ".csv"))
-directory_site_abundance = here::here("output", "site_abundance", datatable_name_abundance)
+directory_site_abundance = here::here("output", "SiteAbundance", datatable_name_abundance)
 
 

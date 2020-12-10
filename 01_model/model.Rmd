@@ -28,7 +28,7 @@ Summary of the model:
 source("01_n_mixture_model_by_group.R", local = knitr::knit_global())
 
 # convert estimated number of group to pig abundance per site (run this R script)
-source("01_number_of_groups_to_abundance.R", local = knitr::knit_global())
+source("02_number_of_groups_to_abundance.R", local = knitr::knit_global())
 ```
 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}

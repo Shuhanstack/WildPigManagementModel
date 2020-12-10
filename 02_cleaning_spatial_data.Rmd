@@ -206,9 +206,9 @@ ggsave(here::here("figure", "location", "september_camera_map.jpg"), sep_camera_
 
 ```{r}
 # read in site abundance data
-site_abundance_april <- read_csv(here::here("01_model", "output", "site_abundance", "site_abundance_April.csv"))
+site_abundance_april <- read_csv(here::here("01_model", "output", "SiteAbundance", "site_abundance_April.csv"))
 
-site_abundance_sep <- read_csv(here::here("01_model", "output", "site_abundance", "site_abundance_Sep.csv"))
+site_abundance_sep <- read_csv(here::here("01_model", "output", "SiteAbundance", "site_abundance_Sep.csv"))
 ```
 
 
