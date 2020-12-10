@@ -1,0 +1,453 @@
+---
+title: "02 Spatial Interpolation on Feral Pig Abundance"
+author: "Shuhan Song"
+date: "11/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+### Attach packages
+
+```{r}
+library(raster)
+library(tidyverse)
+library(here)
+library(lubridate)
+
+# spatial analysis packages
+library(rgdal)
+library(tmap)
+library(sf)
+library(spatstat) 
+library(maptools)
+library(gstat)
+library(sp)
+library(rgeos)
+```
+
+### Read in spatial data
+
+```{r}
+# load preserve boundary data
+jldp_boundary <- read_sf(dsn = here::here("raw_data", "jldp_boundary"), layer = "jldp_boundary")
+
+# ---------------------------- IMPORTANT-------------------------------------------
+# load abundance data
+# september check abundance
+september_abundance <- read_sf(dsn = here::here("cleaned_data", "PigAbundancePerSite_Sep"),
+                      layer = "PigAbundancePerSite_Sep") %>% 
+  dplyr::select(camer_d, wght_s_) %>% 
+  rename(wght_abund = wght_s_) %>% 
+  mutate(month_check = "September Check")
+
+st_crs(september_abundance) = st_crs(jldp_boundary)
+
+# april check abundance
+april_abundance <- read_sf(dsn = here::here("cleaned_data", "PigAbundancePerSite_April"),
+                      layer = "PigAbundancePerSite_April") %>% 
+  dplyr::select(camer_d, wght_s_) %>% 
+  rename(wght_abund = wght_s_)%>% 
+  mutate(month_check = "April Check")
+
+st_crs(april_abundance) = st_crs(jldp_boundary)
+# ---------------------------- IMPORTANT-------------------------------------------
+```
+
+```{r}
+# ---------------------------- IMPORTANT-------------------------------------------
+# things to change:
+
+# month of check (i.e April or September)
+# input of abundance data (i.e. april_abundance or september_abundance)
+# also rename attributes as needed
+month_check = "April"
+first_day = min(april_abundance$date)
+last_day = max(april_abundance$date)
+
+pig_abundance <- april_abundance %>% 
+  rename(statn_d = camer_d, # rename attribute of camera id
+         month_check = month_check, # rename the attribute of april check or september check
+         nmbr_nd = wght_abund) # rename attribute of abundance 
+
+
+# things to change in the following script:
+# name of and text inside the maps
+
+# ---------------------------- IMPORTANT-------------------------------------------
+```
+
+## Summary
+
+This section aims to build a pipeline of spatial interpolation on feral pig abundance at TNC's Jack and Laura Dangermond Preserve (JLDP). Spatial interpolation uses data at certain points of observation to estimate the values of designated variable over the entire region of interest. In other words, it turns discrete point observations into a variable surface. For this project, we interpolate the number of feral pig abundance at `r length(unique(pig_abundance$statn_d))` camera stations operated during `r month_check` check (from `r first_day` to `r last_day`) to the entire JLDP. Analysis basically followed the [tutorial](https://mgimond.github.io/Spatial/interpolation-in-r.html) by Manuel Gimond. We sum up areas with most active pig visits, examine uncertainty of analysis, and give recommendations for further study of feral pig in the preserve. 
+Note: Current version of analysis works with abundance data only so that it does not identify individual pigs.
+
+## Analysis
+
+### Feral pig abundance for each month
+
+```{r}
+# brief overview of the data
+pig_sum <- pig_abundance %>% 
+  group_by(statn_d) %>% 
+  summarize(n_abundance = mean(nmbr_nd)) %>% 
+  filter(n_abundance != "NA")
+```
+
+
+### Feral pig abundance of each camera station at JLDP
+
+```{r}
+station_coord <- as.data.frame(st_coordinates(pig_sum))
+station_coord$statn_d = pig_sum$statn_d
+
+abundance_map <- tm_shape(jldp_boundary) + 
+  tm_polygons() +
+  tm_shape(pig_sum) +
+  tm_dots(col = "n_abundance",
+          palette = "Reds", 
+          auto.palette.mapping = FALSE,
+          title = "Feral Pig Abundance \n(April check)",
+          size = 0.3) + # tmaptools::palette_explorer() +
+  tm_legend(legend.outside = TRUE)
+
+abundance_map
+```
+
+``` {r }
+# save the map
+# change the figure name when needed
+tmap::tmap_save(abundance_map, filename = here::here("figure", "abundance", "april", "abundance_map_april.png"))
+```
+
+
+### Thiessen polygons
+
+```{r}
+# convert sf shapefile to SpatialPointsDataFrame
+jldp_boundary_sp <- sf::as_Spatial(jldp_boundary)
+
+pig_sum_sp <- sf::as_Spatial(pig_sum)
+
+# assign preserve boundary as window for wild pig abundance
+pig_sum_sp@bbox <- jldp_boundary_sp@bbox
+
+# create tessellated surface
+pig_tess_surface <-as(dirichlet(as.ppp(pig_sum_sp)), "SpatialPolygons")
+# mannually add projection information
+sp::proj4string(pig_tess_surface) <- sp::proj4string(pig_sum_sp)
+
+# add point attributes to tessellated surface
+pig_tess_surface.z <- sp::over(pig_tess_surface, pig_sum_sp, fn = mean)
+pig_tess_surface.spdf <- sp::SpatialPolygonsDataFrame(pig_tess_surface, pig_tess_surface.z)
+
+# clip tessellated surface to JLDP boundary
+pig_tess_surface.clp <- raster::intersect(jldp_boundary_sp, pig_tess_surface.spdf)
+
+# map it
+polygon_abundance_map <- tm_shape(pig_tess_surface.clp) +
+  tm_polygons(col = "n_abundance",
+              title = "Feral Pig Abundance \n(April check)") +
+  tm_legend(legend.outside = TRUE)
+
+polygon_abundance_map
+```
+
+``` {r }
+# save the map
+# change the figure name when needed
+tmap::tmap_save(polygon_abundance_map, filename = here::here("figure", "abundance", "april", "polygon_abundance_map_april.png"))
+```
+
+
+### Inverse Distance Weighted (IDW)
+
+```{r}
+# create empty grid with n total cells in boundary box of pig_sum_sp
+grd <- as.data.frame(sp::spsample(pig_sum_sp, "regular", n=50000))
+names(grd) <- c("X", "Y")
+sp::coordinates(grd) <- c("X", "Y")
+sp::gridded(grd) <- TRUE # Create SpatialPixel object
+sp::fullgrid(grd) <- TRUE # Create SpatialGrid object
+
+# mannually add projection information
+sp::proj4string(grd) <- sp::proj4string(pig_sum_sp)
+
+# interpolate the grid cells using a power value of 2 (idp = 2)
+pig_sum_idw <- gstat::idw(n_abundance ~ 1, pig_sum_sp, newdata = grd, idp = 2.0)
+
+# convert to raster object 
+pig_sum_idw_raster <- raster::raster(pig_sum_idw)
+
+# clip to JLDP using mask
+pig_sum_idw_clip <- raster::mask(pig_sum_idw_raster, jldp_boundary_sp)
+
+# map it
+idw_heatmap <- tm_shape(pig_sum_idw_clip) +
+  tm_raster(n = 5, midpoint = 200,
+            title = "Feral Pig abundances \n(April check)") +
+  tm_shape(pig_sum) +
+  tm_dots(size = 0.2) +
+  tm_legend(legend.outside = TRUE)
+
+idw_heatmap 
+```
+
+```{r}
+# save the map
+# change the figure name when needed
+tmap::tmap_save(idw_heatmap, filename = here::here("figure", "abundance", "april", "idw_heatmap_april.png"))
+
+writeRaster(pig_sum_idw_clip, filename = here::here("output_data", "abundance", "idw_heatmap_april.tif"), overwrite = TRUE)
+```
+
+```{r}
+# leave-one-out validation
+pig_idw_out <- vector(length = length(pig_sum_sp))
+
+for (i in 1:length(pig_sum_sp)){
+  pig_idw_out[i] <- gstat::idw(n_abundance ~ 1, pig_sum_sp[-i,], pig_sum_sp[i,], idp = 2.0)$var1.pred
+}
+
+# plot the differences
+OP <- par(pty="s", mar=c(4,3,0,0))
+
+plot(pig_idw_out ~ pig_sum_sp$n_abundance, 
+     asp = 1,
+     xlab = "Observed",
+     ylab = "Predicted",
+     pch = 16,
+     col = rgb(0,0,0,0.5))
+abline(lm(pig_idw_out ~ pig_sum_sp$n_abundance),
+       col = "red",
+       lw=2,
+       lty=2)
+abline(0,1)
+par(OP)
+```
+
+```{r}
+# compute RMSE
+sqrt(sum((pig_idw_out - pig_sum_sp$n_abundance)^2)/length(pig_sum_sp))
+```
+
+### Cross validation
+
+```{r}
+# create the interpolated surface
+img <- gstat::idw(n_abundance ~ 1, 
+                  pig_sum_sp, 
+                  newdata = grd, 
+                  idp = 2.0)
+
+n <- length(pig_sum_sp)
+Z_i <- matrix(nrow = length(img$var1.pred),
+              ncol = n)
+
+# Remove a point, then interpolate
+st <- stack()
+
+for (i in 1:n) {
+  Z_1 <- gstat::idw(n_abundance ~ 1,
+                    pig_sum_sp[-i,],
+                    newdata=grd,
+                    idp=2.0)
+  st <- addLayer(st, raster(Z_1, layer=1))
+  Z_i[,i] <- n*img$var1.pred - (n-1)*Z_1$var1.pred # pseudo-value Z_j
+}
+
+
+# Jackknife estimator of parameter Z at location j
+Z_j <- as.matrix(apply(Z_i, 1, sum, na.rm=TRUE)/n)
+
+
+# Compute (Zi* - Zj)^2
+c1 <- apply(Z_i,2,'-',Z_j)            # Compute the difference
+c1 <- apply(c1^2, 1, sum, na.rm=T ) # Sum the square of the difference
+
+
+# Compute the confidence interval
+CI <- sqrt( 1/(n*(n-1)) * c1)
+
+# Create (CI / interpolated value) raster
+img.sig   <- img
+img.sig$v <- CI /img$var1.pred 
+
+# Clip the confidence raster to Texas
+r <- raster(img.sig, layer="v")
+r.m <- mask(r, jldp_boundary_sp)
+
+ci95_map <- tm_shape(r.m) + 
+  tm_raster(n=10,title="95% Confidence Interval for \nRange of Pig Abundance \n(April check)") +
+  tm_shape(pig_sum_sp) + tm_dots(size=0.1) +
+  tm_legend(legend.outside=TRUE)
+
+ci95_map
+```
+
+
+``` {r }
+# save the map
+# change the figure name when needed
+tmap::tmap_save(ci95_map, filename = here::here("figure", "abundance", "april", "ci95_map_april.png"))
+```
+
+
+### First order polynomial fit 
+
+```{r}
+# add coordinates to pig_sum_sp
+pig_sum_sp$X <- coordinates(pig_sum_sp)[,1]
+pig_sum_sp$Y <- coordinates(pig_sum_sp)[,2]
+
+lm.1 <- lm(n_abundance ~ X + Y, data = pig_sum_sp)
+
+
+# Use the regression model output
+dat.1st <- sp::SpatialGridDataFrame(grd, data.frame(var1.pred = predict(lm.1, newdata = grd)))
+
+# clip the interpolated raster
+
+r_1st <- raster(dat.1st)
+r_1st_m <- mask(r_1st, jldp_boundary_sp)
+
+# Plot the map
+tm_shape(r_1st_m) + 
+  tm_raster(n=10, 
+            title="Feral Pig Abundance (1st order) \n(April check)") +
+  tm_shape(pig_sum_sp) + 
+  tm_dots(size=0.2) +
+  tm_legend(legend.outside=TRUE)
+
+```
+
+### 2nd order polynomial 
+
+```{r}
+lm.2 <- lm(n_abundance ~ X + Y + I(X*X)+I(Y*Y) + I(X*Y), data = pig_sum_sp)
+
+dat.2nd <- SpatialGridDataFrame(grd, data.frame(var1.pred = predict(lm.2, newdata=grd))) 
+
+# Clip the interpolated raster 
+r_2nd   <- raster(dat.2nd)
+r_2nd_m <- mask(r_2nd, jldp_boundary_sp)
+
+# Plot the map
+tm_shape(r_2nd_m) + 
+  tm_raster(n=5, 
+            title="Feral Pig Abundance (2nd order) \n(April check)") +
+  tm_shape(pig_sum_sp) + 
+  tm_dots(size=0.2) +
+  tm_legend(legend.outside=TRUE)
+```
+
+### Kriging
+
+#### Fit the variogram model
+
+```{r}
+# sample variogram 
+var_detrend <- gstat::variogram(n_abundance ~ X + Y, pig_sum_sp, cloud = FALSE)
+
+dat_fit  <- fit.variogram(var_detrend, fit.ranges = FALSE, fit.sills = FALSE,
+                          vgm(psill=180, model="Sph", range=15000, nugget=0))
+
+# The following plot allows us to assess the fit
+plot(var_detrend, dat_fit, xlim=c(0,20000))
+```
+
+#### Kriging surface
+
+```{r}
+pig_krig <- krige(n_abundance ~ X + Y, pig_sum_sp, grd, dat_fit)
+
+# clip the surface
+r_krig_m <- mask(raster(pig_krig), jldp_boundary_sp)
+
+krig_heatmap <- tm_shape(r_krig_m) +
+  tm_raster(n = 5, 
+            title = "Feral Pig Abundance - Kriging \n(April check)") +
+  tm_shape(pig_sum_sp) +
+  tm_dots(size = 0.2) +
+  tm_legend(legend.outside = TRUE)
+
+krig_heatmap
+```
+
+```{r}
+# save the map
+# change the figure name when needed
+tmap::tmap_save(krig_heatmap, filename = here::here("figure", "abundance", "april", "krig_heatmap_april.png"))
+
+writeRaster(r_krig_m, filename = here::here("output_data", "abundance", "krig_heatmap_april.tif"), overwrite = TRUE)
+```
+
+
+#### Confidence of analysis
+
+##### Variance map
+```{r}
+r_var_m <- mask(raster(pig_krig, layer = "var1.var"), jldp_boundary_sp)
+
+var_map <- tm_shape(r_var_m) +
+  tm_raster(n = 7,
+            palette ="Reds",
+            title = "Variance Map \n(April check)") +
+  tm_shape(pig_sum_sp) +
+  tm_dots(size = 0.2) +
+  tm_legend(legend.outside = TRUE)
+
+var_map
+```
+
+
+``` {r }
+# save the map
+# change the figure name when needed
+tmap::tmap_save(var_map, filename = here::here("figure", "abundance", "april", "var_map_april.png"))
+```
+
+
+##### Confidence interval map
+
+```{r}
+ci_pig <- sqrt(raster(pig_krig, layer = "var1.var")) * 1.96
+ci_pig_m <- mask(ci_pig, jldp_boundary_sp)
+
+ci95_krig_map <- tm_shape(ci_pig_m) +
+  tm_raster(n = 7,
+            palette = "Reds",
+            title = "95% CI Map \n(April check)") +
+  tm_shape(pig_sum_sp) +
+  tm_dots(size = 0.2) +
+  tm_legend(legend.outside = TRUE)
+
+ci95_krig_map
+```
+
+``` {r }
+# save the map
+# change the figure name when needed
+tmap::tmap_save(ci95_krig_map, filename = here::here("figure", "abundance", "april", "ci95_krig_map_april.png"))
+```
+
+
+
+## Conclusion and next steps
+
+- Feral pigs are mostly active on the southeastern areas of JLDP during the summer season. 
+
+- Survey for sounder size, sex ratio, average litter size may focus on areas with high pig abundance for better chance of sighting.
+
+- Future camera stations may install around locations with larger CI and higher variance to improve understanding of pig activities. 
+
+- Further analysis on monthly feral pig movement or comparation between winter and summer can be very helpful once the data is available. 
+
+
+## Reference
+
+- Tutorial of [spatial interpolation in R ](https://mgimond.github.io/Spatial/interpolation-in-r.html)

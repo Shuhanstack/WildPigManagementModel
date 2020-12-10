@@ -1,0 +1,242 @@
+---
+title: "01 Cleaning spatial data"
+author: "Shuhan Song"
+date: "6/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE)
+```
+
+```{r}
+# attach packages
+library(tidyverse)
+library(tmap)
+library(sf)
+library(janitor)
+library(here)
+```
+
+```{r}
+# read in data
+## spatial data
+jldp_boundary <- read_sf(dsn = here::here("raw_data", "jldp_boundary"), layer = "jldp_boundary") %>% 
+  clean_names()
+jldp_camera_location_2014 <- read_sf(dsn = here::here("raw_data", "jldp_2014_cameratraplocations"),
+                                     layer = "jldp_2012WRAcameratraplocations") %>% 
+  clean_names()
+
+## feral pig occurrance data
+camera_trap_occurrence_2014 <- read_csv(here::here("cleaned_data", "pig_occurrence_per_episode.csv"))
+```
+
+```{r, eval=FALSE}
+# check CRS of spatial data
+st_crs(jldp_boundary) # EPSG:2229
+st_crs(jldp_camera_location_2014) # EPSG:2229
+st_crs(jldp_camera_location_2019) # EPSG:2229
+```
+
+```{r}
+# clean camera trap location data in 2014  
+
+jldp_camera_location_2014_clean <- jldp_camera_location_2014 %>% 
+  filter(!str_detect(comment, pattern = "game"))%>% 
+  dplyr::select(id, gps_date, geometry) %>% 
+  rename(camera_id = id) %>% 
+  unique()
+
+# Use E4-1 location recorded in year 2012
+e4_1 <- filter(jldp_camera_location_2014_clean, camera_id =="E4-1" & gps_date > 1900) 
+not_e4_1 <- filter(jldp_camera_location_2014_clean, camera_id !="E4-1")
+
+jldp_camera_location_2014_e4 <- rbind(e4_1, not_e4_1)
+```
+
+```{r}
+# look at 2014 camera station J3-1 which has two georeferenced locations but otherwise identical attributes
+
+camera_examine_2014 <- jldp_camera_location_2014_e4 %>% 
+  count(camera_id) %>% 
+  filter(n >1) # only station J3-1 has more than one unique geometry
+
+camera_location_two_2014 <- jldp_camera_location_2014_e4 %>% 
+  filter(camera_id %in% camera_examine_2014$camera_id) %>% 
+  arrange(camera_id) %>% 
+  mutate(group = as.character(c(1,2)))
+
+station_coord <- as.data.frame(st_coordinates(camera_location_two_2014))
+station_coord$camera_id = camera_location_two_2014$camera_id
+
+ggplot(data = camera_location_two_2014)+
+  geom_sf(data = jldp_boundary)+
+  geom_sf(aes(color = group)) +
+  geom_text(data =station_coord, 
+            aes(X, Y, label = camera_id),
+            size = 2)
+
+# The two georef locations are very close. Looking at the original data, choose the geomertry that has two recordings other than the one with one recording. 
+```
+
+```{r}
+j3_1 <- jldp_camera_location_2014 %>% 
+  filter(id == "J3-1") %>% 
+  filter(global_id == "f27fd59a-457b-419c-a511-6c5839a8bd2e") %>%  # global id with the chosen geometry
+  rename(camera_id = id) %>% 
+  dplyr::select(camera_id, geometry)
+
+jldp_camera_location_2014_j3 <-  jldp_camera_location_2014_e4 %>% 
+  dplyr::select(-gps_date) %>% 
+  filter(camera_id != "J3-1") %>% 
+  rbind(j3_1) 
+
+# check uniqueness again
+camera_examine_2014 <- jldp_camera_location_2014_j3 %>% 
+  count(camera_id) %>% 
+  filter(n >1)
+
+st_crs(jldp_camera_location_2014_j3) = 2229
+```
+
+```{r}
+# join 2014 feral pig occurrence with camera stations 
+camera_trap_occurrence_2014_joined <- jldp_camera_location_2014_j3 %>% 
+  sp::merge(camera_trap_occurrence_2014, by = "camera_id", all.y = TRUE) 
+
+st_crs(camera_trap_occurrence_2014_joined) = 2229
+```
+
+```{r}
+# write 2014 georeferenced camera station data with wildlife occurrences as shapefile into cleaned_data/
+# make a folder called "2014_cleaned_feralpig_occurrences/" under cleaned_data/ if there's no one
+# if want to write the cleaned data, change eval=TRUE
+
+pig_occurrence_sp <- st_collection_extract(camera_trap_occurrence_2014_joined, "POINT")
+
+st_write(pig_occurrence_sp, 
+         dsn = here::here("cleaned_data", "2014_cleaned_feralpig_occurrences", "2014_cleaned_feralpig_occurrences.shp"),
+         layer = "2014_cleaned_feralpig_occurrences",
+         delete_layer = TRUE)
+```
+
+```{r}
+jldp_camera_location_2014_with_records <- camera_trap_occurrence_2014_joined %>% 
+  dplyr::select(camera_id, geometry) %>% 
+  unique()
+
+
+st_crs(jldp_camera_location_2014_with_records)
+```
+
+```{r, eval=FALSE}
+# write 2014 georeferenced camera station data as shapefile into cleaned_date/
+# if want to write the cleaned data, change eval=TRUE
+st_write(jldp_camera_location_2014_j3, 
+         dsn = here::here("cleaned_data", "2014_cleaned_jldp_cameratraplocations", "2014_cleaned_jldp_cameratraplocations.shp"),
+         layer = "2014_cleaned_jldp_cameratraplocations",
+         delete_layer = TRUE)
+
+st_crs(jldp_camera_location_2014_j3)
+```
+
+Mapping `r length(jldp_camera_location_2014_with_records$camera_id)` camera stations that are included in 2013-2014 camera trap survey
+
+```{r}
+ggplot(data = jldp_boundary) +
+  geom_sf()+
+  geom_sf(data = camera_trap_occurrence_2014_joined)
+```
+
+## Map camera stations that worked in April and September check respectively:
+
+```{r}
+# use filter to find camera stations in April and September check 
+
+april_cameras <- jldp_camera_location_2014_with_records %>% 
+  filter(camera_id %in% c("B1-1", "C2-1", "C2-2", "C3-1", "C3-2", "D4-1", "D5-1",
+                           "E2-1", "E4-2", "E5-1", "F2-1", "F3-1", "F4-1", "F5-1",
+                           "G6-1", "H1-1", "H4-1", "H5-1", "H6-2", "H7-1", "I2-1",
+                           "I3-1", "I5-3", "J2-1", "J4-1", "K3-1", "K5-1", "L3-1"))
+
+april_coords <- as.data.frame(sf::st_coordinates(april_cameras))
+april_coords$camera_id = april_cameras$camera_id
+
+april_camera_map <- ggplot(data = jldp_boundary) +
+  geom_sf(fill = "white") +
+  geom_sf(data = april_cameras,
+          color = "red") +
+  geom_text(data = april_coords, 
+            aes(X, Y+1000, label = camera_id),
+            size = 3) +
+  labs(x = "X",
+      y = "Y") +
+  theme_gray()
+
+ggsave(here::here("figure", "location", "april_camera_map.jpg"), april_camera_map)
+
+
+
+sep_cameras <- jldp_camera_location_2014_with_records %>% 
+  filter(camera_id %in% c("C2-1", "C3-2", "D4-1", "D5-1", "E2-1", "E4-2", "E5-1", 
+                           "F2-1", "F3-1", "F4-1", "F5-1", "G5-2", "G5-3", "G6-2",
+                           "G6-1", "H1-2", "H2-2", "H2-3", "H2-4", "H2-5", "H4-1", 
+                           "I3-1", "J2-1", "K3-1", "K4-1", "L3-1", "M4-2"))
+
+sep_coords <- as.data.frame(sf::st_coordinates(sep_cameras))
+sep_coords$camera_id = sep_cameras$camera_id
+
+sep_camera_map <- ggplot(data = jldp_boundary) +
+  geom_sf(fill = "white") +
+  geom_sf(data = sep_cameras,
+          color = "red") +
+  geom_text(data = sep_coords, 
+            aes(X, Y+1000, label = camera_id),
+            size = 2.5) +
+  labs(x = "X",
+      y = "Y") +
+  theme_gray()
+
+ggsave(here::here("figure", "location", "september_camera_map.jpg"), sep_camera_map)
+```
+
+## Transform tabular site abundance data to spatial data
+
+```{r}
+# read in site abundance data
+site_abundance_april <- read_csv(here::here("01_model", "output", "site_abundance", "site_abundance_April.csv"))
+
+site_abundance_sep <- read_csv(here::here("01_model", "output", "site_abundance", "site_abundance_Sep.csv"))
+```
+
+
+```{r}
+# join site abundance data with camera site location data 
+
+### April
+site_abundance_april_spatial <- jldp_camera_location_2014_j3 %>% 
+  sp::merge(site_abundance_april, by = "camera_id", all.y = TRUE) 
+
+st_crs(site_abundance_april_spatial) = 2229
+
+### September
+site_abundance_sep_spatial <- jldp_camera_location_2014_j3 %>% 
+  sp::merge(site_abundance_sep, by = "camera_id", all.y = TRUE) 
+
+st_crs(site_abundance_sep_spatial) = 2229
+```
+
+
+```{r}
+st_write(site_abundance_april_spatial, 
+         dsn = here::here("cleaned_data", "PigAbundancePerSite_April", "PigAbundancePerSite_April.shp"),
+         layer = "PigAbundancePerSite_April",
+         delete_layer = TRUE)
+
+st_write(site_abundance_sep_spatial, 
+         dsn = here::here("cleaned_data", "PigAbundancePerSite_Sep", "PigAbundancePerSite_Sep.shp"),
+         layer = "PigAbundancePerSite_Sep",
+         delete_layer = TRUE)
+```

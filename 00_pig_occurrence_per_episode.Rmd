@@ -1,0 +1,149 @@
+---
+title: "Pig Occurrence per Episode"
+author: "Shuhan Song"
+date: "11/3/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE, 
+                      warning = FALSE)
+
+library(tidyverse)
+library(janitor)
+library(here)
+library(lubridate)
+library(chron)
+```
+
+
+
+```{r}
+# read in data
+pig_occurrence <- read_csv(here("raw_data", "TimelapseData_join_pig_occurrence.csv")) %>% 
+  clean_names()
+
+# clean data
+pig_occurrence_clean <- pig_occurrence %>% 
+  select(file, relative_path, species, date, time, count_species) %>% 
+  separate(date, into = c("day", "month", "year"), sep = "-") %>% 
+  filter(year != 15) %>% # only a few camera stations have records in 2015 so we exclude occurrences in 2015
+  unite(date, day, month, year, sep = "-") %>% 
+  mutate(date = dmy(date))
+```
+
+# summarize pig occurrence per episode
+
+## determine episode
+
+```{r}
+# time difference between two successive images
+
+pig_episode <- pig_occurrence_clean %>% 
+  arrange(relative_path, date) %>%
+  mutate(time = chron(times = time), 
+         time_diff = NA, 
+         episode = NA) 
+  
+time_diff = diff(pig_episode$time)
+# 1/86400 for one second
+
+time_diff_length <- length(time_diff)
+
+i = 1
+
+for (i in 1:time_diff_length) {
+  pig_episode$time_diff[i] = time_diff[i]
+  i = i + 1
+}
+```
+
+we choose 5 min and 30 sec as the time threshold between two successive photos
+
+```{r}
+# assign episode
+
+episode = 1
+
+row_n_join_pig = length(pig_episode$file)
+
+for (i in 1:time_diff_length) {
+  
+  if(pig_episode$time_diff[i] >= 0 & pig_episode$time_diff[i] <= 3.8194444444e-03){
+    pig_episode$episode[i] = episode # 3.8194444444e-03 is 1/86400 * (5*60 + 30), which is 00:05:30
+  }else{
+    pig_episode$episode[i] = episode
+    episode = episode + 1 
+  }
+}
+
+# see the last row has NA for time_diff and episode
+# filter(pig_episode, is.na(episode))
+
+pig_episode$episode[row_n_join_pig] = pig_episode$episode[row_n_join_pig-1]
+```
+
+
+## determine the pig occurrence per episode
+
+We use the maximum number of occurrence in each episode to be the occurrence for that episode
+
+```{r}
+# find max count in each episode
+
+pig_episode_max_count <- pig_episode %>% 
+  group_by(episode) %>% 
+  mutate(max_count = max(count_species))
+
+pig_episode_date_unique <- pig_episode_max_count %>% 
+  select(relative_path, date, episode, max_count) %>% 
+  unique() 
+```
+
+# check the result
+
+```{r}
+# same episode from different date/site
+
+pig_episode_date_unique %>%  group_by(episode) %>% summarize(n = n()) %>% filter(n > 1)
+# episode 109 has pig observations from in different site/date
+
+# look at episode 109
+pig_episode_109 <- pig_episode_date_unique %>% 
+  filter(episode == 109)
+# Since max_count for both cases are 1, the occurrence per episode would not be affected.
+
+# reassign unique ids to all observations
+pig_episode_date_unique$episode <- 1:nrow(pig_episode_date_unique)
+```
+
+```{r}
+# zero pig occurrence
+
+pig_occurrence_zero <- pig_episode_date_unique %>% filter(max_count == 0)
+
+# filter the two episodes
+pig_episode %>% filter(episode %in% pig_occurrence_zero$episode)
+
+# the original counts are zeros
+```
+
+
+# Clean camera trap station IDs
+
+```{r}
+pig_occurrence_per_episode <- pig_episode_date_unique %>% 
+  filter(max_count != 0) %>% 
+  separate(relative_path, into = c("month", "check", "camera_station", "id", "notes")) %>% 
+  select(-notes, -episode) %>% 
+  unite("camera_id", camera_station, id, sep = "-")  %>% 
+  unite("month_check", month, check)
+```
+
+# Write cleaned data
+
+```{r, eval=T}
+write_csv(pig_occurrence_per_episode, here::here("cleaned_data", "pig_occurrence_per_episode.csv"))
+```
+
