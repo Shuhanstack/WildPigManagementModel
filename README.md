@@ -23,7 +23,7 @@ This repo contains data cleaning, wrangling, and analysis scripts for N-mixture 
 
   - `model.R`: creates HTML report for the analysis in addition to tabular outputs in CSV format
 
-  - `model.Rmd`: creates tabular outputs in CSV format by running the three R scripts (i.e. `00_cleaning_camera_trap_pig_count.R`, `01_n_mixture_model_by_group.R`, and `02_number_of_groups_to_abundance.R`) given the parameters defined in `parameters.R`
+  - `model.Rmd`: uses **knit**  to creates tabular outputs in CSV format by running the three R scripts (i.e. `00_cleaning_camera_trap_pig_count.R`, `01_n_mixture_model_by_group.R`, and `02_number_of_groups_to_abundance.R`) given the parameters defined in `parameters.R`
 
   - `model.Rproj`: R project for this `model/` folder
 
@@ -56,4 +56,11 @@ This repo contains data cleaning, wrangling, and analysis scripts for N-mixture 
 ### Usage
 
 1. Run `00_pig_occurrence_per_episode.Rmd`
+
+2. Set parameters in `01_model/parameters.R`. **Run** `model.R` or **knit** `model.Rmd`
+   1. Outputs of estimated pig abundance at each camera trap station in `html/` in HTML and/or `output/` in CSV
+3. Run `02_cleaning_spatial_data.Rmd`
+   1. Outputs of camera trap stations in `figure/location/`
+4. Run `03_spatial_interpolation_pig_abundance.Rmd` 
+   1. Outputs of spatial interpolation in `figure/abundance/` in PNG and `output_data/abundance/` in GeoTIF
 
