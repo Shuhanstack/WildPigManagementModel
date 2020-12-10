@@ -30,9 +30,9 @@ directory_NumGroupPerDay = here::here("scratch","NumGroupPerDay.csv")
 #                    01_n_mixture_model_by_group                    #
 #===================================================================#
 ## select the time period of visits over which you want to run the N-Mixture model
-begin_visit = "x2014_04_24"
-end_visit = "x2014_09_25"
-name_analysis_n_mixture = "Sep"
+begin_visit = "x2013_10_23"
+end_visit = "x2014_04_22"
+name_analysis_n_mixture = "April"
 
 ## set up model parameters: 
 K_n_mixture = 100

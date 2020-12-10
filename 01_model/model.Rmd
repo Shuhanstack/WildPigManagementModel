@@ -35,7 +35,7 @@ source("01_number_of_groups_to_abundance.R", local = knitr::knit_global())
 library(kableExtra)
 ```
 
-The detect probability is `r round(detect_prop_n_mixture*100, 2)`%.
+The detection probability is `r round(detect_prop_n_mixture*100, 2)`%.
 
 Estimated number of groups of pigs and corresponding pig abundance from `r as.character(readr::parse_number(gsub("_", "", begin_visit)))` to `r as.character(readr::parse_number(gsub("_", "", end_visit)))` are:
 
