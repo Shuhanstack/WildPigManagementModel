@@ -13,7 +13,7 @@ This repo contains data cleaning, wrangling, and analysis scripts for N-mixture 
 
   - `02_number_of_groups_to_abundance.R`: transform the estimated number of groups into abundance using the weighted average of group size. The weighted average of group size used the probability distribution of group size over all camera stations and group size observed at each camera station to find the weighted average
 
-    <img src="image/wt_avg_eqn.png" style="zoom:40%;" />
+    <img src="image/wt_avg_eqn.png" style="zoom:40%;" /> [image cite](https://www.statisticshowto.com/weighted-mean/#:~:text=Weighted%20mean%20%3D%20%CE%A3wx%2F%CE%A3w&text=w%20%3D%20the%20weights.,x%20%3D%20the%20value.)
 
   - `html/`: contains HTML outputs
 
