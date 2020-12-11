@@ -39,18 +39,29 @@ This repo contains data cleaning, wrangling, and analysis scripts for N-mixture 
   - `scratch/`: contains secondary data output
 
 - `02_cleaning_spatial_data.Rmd`: cleans the raw data of camera trap stations by removing duplicates and filtering out stations that were not used in the study; creates maps of the locations of camera stations which are store in `figure/location/`; transform tabular data of pig abundance in `01_model/output/SiteAbundance/` into spatial data and stored in `cleaned_data/`
+
 - `03_spatial_interpolation_pig_abundance.Rmd`: creates pig abundance heatmaps and other analysis outputs using spatial interpolation; all analysis outputs are stored in `figure/abundance/` as figures in PNG format; abundance heatmaps made by kriging are also stored in GeoTIF in `output_data/abundance`
+
+- `04_hunting_and_trapping.Rmd`: data wrangling and visualization of pig occurrence data to observe pig activity by month and hour
+
 - `cleaned_data`: contains secondary data
+
 - `CP-WildPigManagement.Rproj`: R project at the base of the repo
+
 - `figure`: contains figure outputs from analysis
   - `abundance/`: contains spatial interpolation outputs of pig abundance
     - `april/`: results for April Check
     - `september/`: results for September Check
   - `location/`: contains maps for camera trap locations for both April and September Check
+  
 - `image`: contains image used in this `README.md`
+
 - `output_data/`: contains important outputs 
+  
   - `abundance/`: contains heatmaps of pig abundance in GeoTIF format created by kriging
+  
 - `raw_data/`: contains raw data used in the analysis
+
 - `README.md`: this file
 
 ### Usage
@@ -63,4 +74,6 @@ This repo contains data cleaning, wrangling, and analysis scripts for N-mixture 
    1. Outputs of camera trap stations in `figure/location/`
 4. Run `03_spatial_interpolation_pig_abundance.Rmd` 
    1. Outputs of spatial interpolation in `figure/abundance/` in PNG and `output_data/abundance/` in GeoTIF
+5. Run `04_hunting_and_trapping.Rmd` 
+   1. Outputs of feral pig occurrence by months and hour in `figure/hunting_and_trapping/` as JPG
 
