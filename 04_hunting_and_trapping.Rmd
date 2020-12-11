@@ -1,0 +1,173 @@
+---
+title: "benson_code"
+author: "Benson Truong"
+date: "11/16/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+```
+
+```{r}
+# Attack packages
+library(tidyverse)
+library(here)
+library(janitor)
+library(lubridate)
+library(chron)
+```
+
+```{r}
+# Read in pig data
+pig_image <- read_csv(here::here("raw_data", "TimelapseData_join_pig_occurrence.csv")) 
+
+# Clean and separate the dates and times
+pig_image_clean <- pig_image %>% 
+  clean_names() %>% 
+  select(file, relative_path, species, date, time, count_species) %>% 
+  separate(date, into = c("day", "month", "year"), sep = "-") %>% 
+  separate(time, into = c("hour", "minute", "second"))
+
+# Change month to a factor and assign levels
+pig_image_clean$month <- factor(pig_image_clean$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+# levels(pig_image_clean$month) <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+# Create summary tables
+month_summary_table <- pig_image_clean %>% 
+  group_by(month) %>% 
+  summarize(
+    occurences = sum(count_species)
+  )
+
+hour_summary_table <- pig_image_clean %>% 
+  group_by(hour) %>% 
+  summarize(
+    occurences = sum(count_species)
+  )
+
+# Column graphs
+ggplot(data = pig_image_clean) +
+  geom_col(aes(x = month, y = count_species))
+
+ggplot(data = pig_image_clean) +
+  geom_col(aes(x = hour, y = count_species))
+```
+
+```{r}
+# Change the Camera Station ID names
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C2-1"] <- "April_C2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C2-2\\102RECNX"] <- "April_C2_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C2-2\\103RECNX"] <- "April_C2_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C2-2\\104RECNX"] <- "April_C2_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C3-1"] <- "April_C3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\C3-2 - photos labeled as C3-1"] <- "April_C3_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\D5-1 - photos labeled as F6-1"] <- "April_D5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\E2-1"] <- "April_E2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\E4-2"] <- "April_E4_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\E5-1"] <- "April_E5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\F3-1\\102RECNX"] <- "April_F3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\F4-1"] <- "April_F4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\F5-1"] <- "April_F5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\G6-1"] <- "April_G6_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\H1-1\\102RECNX"] <- "April_H1_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\H4-1 - photos labeled as I5-2"] <- "April_H4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\H5-1"] <- "April_H5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\H6-2"] <- "April_H6_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\H7-1"] <- "April_H7_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\I2-1\\102RECNX"] <- "April_I2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\I2-1\\103RECNX"] <- "April_I2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\I2-1\\104RECNX"] <- "April_I2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\I3-1"] <- "April_I3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\I5-3"] <- "April_I5_3"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\J2-1"] <- "April_J2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\J4-1"] <- "April_J4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\K3-1\\101RECNX"] <- "April_K3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\K3-1\\102RECNX"] <- "April_K3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\K5-1 - photos from 12.2013-1.2014 found on D4-1 memory card [3B]"] <- "April_K5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\L3-1\\104RECNX"] <- "April_L3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "April_Check\\L3-1\\105RECNX"] <- "April_L3_1"
+
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\C2-1"] <- "September_C2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\C3-2- listed as C3-1 on photos\\100RECNX"] <- "September_C3_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\D4-1"] <- "September_D4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\D5-1 - listed as F6-1 on photos"] <- "September_D5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\E4-2\\101RECNX"] <- "September_E4_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\E5-1"] <- "September_E5_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\F2-1"] <- "September_F2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\F3-1\\100RECNX"] <- "September_F3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\F4-1"] <- "September_F4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\G5-2 - listed as H6-2 on photos"] <- "September_G5_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\G5-3 - listed as E5-1 on photos"] <- "September_G5_3"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\H2-2 - listed as I2-1 on photos"] <- "September_H2_2"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\H2-3 - listed as B1-1 on photos"] <- "September_H2_3"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\H2-4 - listed as J4-1 on photos"] <- "September_H2_4"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\I3-1 - listed as I5-1 on photos"] <- "September_I3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\J2-1\\100RECNX"] <- "September_J2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\J2-1\\101RECNX"] <- "September_J2_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\K3-1"] <- "September_K3_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\K4-1 - listed as G4-1 on photos\\102RECNX"] <- "September_K4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\K4-1 - listed as G4-1 on photos\\103RECNX"] <- "September_K4_1"
+pig_image_clean$relative_path[pig_image_clean$relative_path == "September_Check\\M4-2\\100RECNX"] <- "September_M4_2"
+
+unique <- data.frame(x = unique(pig_image_clean$relative_path))
+
+# April Check Data
+april_check <- pig_image_clean %>% 
+  filter(relative_path %in% c("April_C2_1", "April_C2_2", "April_C3_1", "April_C3_2", "April_D5_1", "April_E2_1", "April_E4_2", "April_E5_1", "April_F3_1", "April_F4_1", "April_F5_1", "April_G6_1", "April_H1_1", "April_H4_1", "April_H5_1", "April_H6_2", "April_H7_1", "April_I2_1", "April_I3_1", "April_I5_3", "April_J2_1", "April_J4_1", "April_K3_1", "April_K5_1", "April_L3_1"))
+
+# September Check Data, exclude D4_1
+september_check <- pig_image_clean %>% 
+  filter(relative_path %in% c("September_C2_1", "September_C3_2", "September_D5_1", "September_E4_2", "September_E5_1", "September_F2_1", "September_F3_1", "September_F4_1", "September_G5_2", "September_G5_3", "September_H2_2", "September_H2_3", "September_H2_4", "September_I3_1", "September_J2_1", "September_K3_1", "September_K4_1", "September_M4_2"))
+
+# Combine Both Data
+combine_data <- rbind(april_check, september_check)
+
+# Change month to a factor and assign levels
+combine_data$month <- factor(combine_data$month, levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+
+# Pig Occurrences by Month
+ggplot() +
+  geom_col(data = combine_data, aes(x = month, y = count_species)) +
+  labs(title = "Feral Pig Occurrences by Month", x = "Month", y = "Occurrences") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Save picture
+ggsave("Feral_Pig_Occurences_by_Month.jpg", height = 5, width = 9)
+
+# Pig Occurences by Hour
+ggplot() +
+  geom_col(data = combine_data, aes(x = hour, y = count_species)) +
+  labs(title = "Feral Pig Occurrences by Hour", x = "Hour", y = "Occurrences") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ggsave("Feral_Pig_Occurences_by_Hour.jpg", height = 5, width = 9)
+
+# Column graph with camera ID
+# ggplot() +
+#   geom_col(data = combine_data, aes(x = month, y = count_species, fill = relative_path))
+```
+
+```{r}
+# Table with Camera ID and Occurences
+table <- combine_data %>% 
+  group_by(relative_path) %>% 
+  summarise(total_occurrences = sum(count_species))
+
+# Testing the numbers for april l3-1
+l3_1 <- combine_data %>% 
+  filter(relative_path == "April_L3_1")
+
+# It looks good, the timelapsedata_join_pig_image on google drive only counts the number of relative path (episodes) and not the actually pig occurences
+```
+
+
+
+
+
+
+
